@@ -1,17 +1,15 @@
 
 #include <winSock2.h>
 #include <ws2tcpip.h>
-
+#include <windows.h>
+#include <dsound.h>
 #include <stdio.h>
 #include <stdint.h>
-//#include <cstdio>
-#include <windows.h>
 
-#include <dsound.h>
+// #include <gj_lib.h>
+#include "shared.cc"
 
 #define SERVER_PORT "3430"
-
-#define assert(exp) if (!exp) { *((int*)0) = 0; }
 
 #pragma pack(push, 1)
 struct WavFormatChunk {
@@ -126,6 +124,8 @@ void writeAudioToFile (char *filename, void *data, size_t size) {
 int main () {
 	printf("Voice recording test \n");
 	
+	StackAllocator transient = createStackAllocator(megabytes(1));
+
 	// Make sure these are the sizes I expect on whatever compiler I'm using
 	assert(sizeof(short) == 2);
 	assert(sizeof(int) == 4);
@@ -178,7 +178,7 @@ int main () {
 		dsResult = dsCapture->CreateCaptureBuffer(&dsBufferDesc, &dsCaptureBuffer, NULL);
 		if (dsResult == DS_OK) {
 			dsCaptureInitialised = true;
-			dsCaptureBuffer->Start(0);
+			dsCaptureBuffer->Start(DSCBSTART_LOOPING);
 
 			/*while (true) {
 				DWORD status;
@@ -229,16 +229,21 @@ int main () {
 					if (dsOutput->CreateSoundBuffer(&secondBufferDesc, &secondaryBuffer, 0) == DS_OK) {
 						dsOutputInitialised = true;
 
-						void *region1;
+						/*void *region1;
 						DWORD region1Size;
 						void *region2;
 						DWORD region2Size;
 						secondaryBuffer->Lock(0, SOUND_BUFFER_SIZE, &region1, &region1Size, &region2, &region2Size, DSCBLOCK_ENTIREBUFFER);
 						memcpy(region1, recording, SOUND_BUFFER_SIZE);
-						secondaryBuffer->Unlock(&region1, region1Size, &region2, region2Size);
+						secondaryBuffer->Unlock(&region1, region1Size, &region2, region2Size);*/
 
-						secondaryBuffer->SetCurrentPosition(0);
-						secondaryBuffer->Play(0, DSCBSTATUS_LOOPING, 0);
+						HRESULT dsResult;
+						if ((dsResult = secondaryBuffer->SetCurrentPosition(0)) != DS_OK) {
+							assert(false);
+						}
+						if ((dsResult = secondaryBuffer->Play(0, 0, DSBPLAY_LOOPING)) != DS_OK) {
+							assert(false);
+						}
 
 						/*while (true) {
 							DWORD status;
@@ -305,34 +310,56 @@ int main () {
 					freeaddrinfo(serverInfo);
 
 					while (true) {
-#if 0
+#if 1
 						static DWORD captureLastReadPosition = 0;
 						DWORD captureCursor;
 						DWORD readCursor;
-						dsCaptureBuffer->GetCurrentPosition(&captureCursor, &readCursor);
-						LockedBuffer lock;
-						if (dsCaptureBuffer->Lock(captureLastReadPosition, readCursor - captureLastReadPosition,
-												  &lock.ptr1, &lock.size1, &lock.ptr2, &lock.size2, 0) == DS_OK) {
-							send(socketHandle, (char*)lock.ptr1, lock.size1, 0);
-							dsCaptureBuffer->Unlock(lock.ptr1, lock.size1, lock.ptr2, lock.size2);
+						HRESULT captureGetCursorResult = dsCaptureBuffer->GetCurrentPosition(&captureCursor, &readCursor);
+						if (captureGetCursorResult == DS_OK) {
+							LockedBuffer lock;
+							int amount = readCursor - captureLastReadPosition;
+							if (amount > 0) {
+								HRESULT captureLockResult = dsCaptureBuffer->Lock(captureLastReadPosition, amount,
+														  						  &lock.ptr1, &lock.size1, &lock.ptr2, &lock.size2, 0);
+								if (captureLockResult == DS_OK) {
+									send(socketHandle, (char*)lock.ptr1, lock.size1, 0);
+									dsCaptureBuffer->Unlock(lock.ptr1, lock.size1, lock.ptr2, lock.size2);
+									captureLastReadPosition += readCursor - captureLastReadPosition;
+									if (captureLastReadPosition > SOUND_BUFFER_SIZE) {
+										captureLastReadPosition -= SOUND_BUFFER_SIZE;
+									}
+
+									int bytesRead = recv(socketHandle, recvBuffer, SOUND_BUFFER_SIZE, 0);
+									printf("bytes received %i \n", bytesRead);
+
+									DWORD playCursor;
+									DWORD writeCursor;
+									if (secondaryBuffer->GetCurrentPosition(&playCursor, &writeCursor) == DS_OK) {
+										printf("write cursor %i \n", writeCursor);
+										LockedBuffer writeLock = {};
+										if (secondaryBuffer->Lock(writeCursor, bytesRead, &writeLock.ptr1, &writeLock.size1, &writeLock.ptr2, &writeLock.size2, 0) == DS_OK) {
+											memcpy(writeLock.ptr1, recvBuffer, writeLock.size1/*bytesRead*/);
+											secondaryBuffer->Unlock(&writeLock.ptr1, writeLock.size1, &writeLock.ptr2, writeLock.size2);
+										}
+									} else {
+										assert(false);
+									}
+								} else {
+									assert(false);
+								}
+							}
+						} else {
+							assert(false);
 						}
-
-						int bytesRead = recv(socketHandle, recvBuffer, SOUND_BUFFER_SIZE, 0);
-
-						DWORD playCursor;
-						DWORD writeCursor;
-						secondaryBuffer->GetCurrentPosition(&playCursor, &writeCursor);
-						LockedBuffer writeLock = {};
-						secondaryBuffer->Lock(writeCursor, bytesRead, &writeLock.ptr1, &writeLock.size1, &writeLock.ptr2, &writeLock.size2, 0);
-						memcpy(writeLock.ptr1, recvBuffer, bytesRead);
-						secondaryBuffer->Unlock(&writeLock.ptr1, writeLock.size1, &writeLock.ptr2, writeLock.size2);
 #endif
+#if 0
 						send(socketHandle, "hey", 3, 0);
 						char buffer[10] = {};
 						int bytesRead = recv(socketHandle, buffer, 10, 0);
 						printf("Recv %s \n", buffer);
+#endif
 
-						Sleep(1000);
+						Sleep(100);
 					}
 				} else {
 					int error = WSAGetLastError();

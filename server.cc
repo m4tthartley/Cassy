@@ -45,22 +45,26 @@ int main () {
 							int acceptHandle = accept(socketHandle, &clientAddr, NULL/*&clientAddrSize*/);
 							if (acceptHandle != INVALID_SOCKET) {
 								while (true) {
-									memset(recvBuffer, 0, SOUND_BUFFER_SIZE);
+									
 									int bytesRead = recv(acceptHandle, recvBuffer, SOUND_BUFFER_SIZE, 0);
+									printf("bytes received %i \n", bytesRead);
 									if (bytesRead == SOCKET_ERROR) {
 										// int x = 0;
 										int error = WSAGetLastError();
 										int x = 0;
+										printf("Error %i \n", error);
 									}
-									send(acceptHandle, "ho", 2, 0);
-									printf("Recv %s \n", recvBuffer);
+									send(acceptHandle, recvBuffer, bytesRead, 0);
+									// printf("Recv %s \n", recvBuffer);
+
+									memset(recvBuffer, 0, SOUND_BUFFER_SIZE);
 								}
 							} else {
 								int error = WSAGetLastError();
 								int x = 0;
 							}
 
-							Sleep(1000);
+							Sleep(100);
 						}
 					}
 				}
