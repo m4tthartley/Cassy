@@ -60,7 +60,7 @@ struct WavHeader {
 #define SOUND_CHANNELS 2
 #define SOUND_SAMPLE_BYTES 2
 #define SOUND_BYTES_PER_SEC (SOUND_HTZ * SOUND_CHANNELS * SOUND_SAMPLE_BYTES)
-#define SOUND_BUFFER_SIZE (SOUND_BYTES_PER_SEC * 4)
+#define SOUND_BUFFER_SIZE (SOUND_BYTES_PER_SEC * 1)
 
 #if 0
 short swapEnd16 (short num) {
@@ -310,22 +310,26 @@ int main () {
 					freeaddrinfo(serverInfo);
 
 					while (true) {
-#if 1
+#if 0
 						static DWORD captureLastReadPosition = 0;
 						DWORD captureCursor;
 						DWORD readCursor;
 						HRESULT captureGetCursorResult = dsCaptureBuffer->GetCurrentPosition(&captureCursor, &readCursor);
 						if (captureGetCursorResult == DS_OK) {
 							LockedBuffer lock;
+							if (readCursor < captureLastReadPosition) {
+								readCursor += SOUND_BUFFER_SIZE;
+							}
 							int amount = readCursor - captureLastReadPosition;
+							printf("amount %i \n", amount);
 							if (amount > 0) {
 								HRESULT captureLockResult = dsCaptureBuffer->Lock(captureLastReadPosition, amount,
 														  						  &lock.ptr1, &lock.size1, &lock.ptr2, &lock.size2, 0);
 								if (captureLockResult == DS_OK) {
 									send(socketHandle, (char*)lock.ptr1, lock.size1, 0);
 									dsCaptureBuffer->Unlock(lock.ptr1, lock.size1, lock.ptr2, lock.size2);
-									captureLastReadPosition += readCursor - captureLastReadPosition;
-									if (captureLastReadPosition > SOUND_BUFFER_SIZE) {
+									captureLastReadPosition += amount;
+									if (captureLastReadPosition >= SOUND_BUFFER_SIZE) {
 										captureLastReadPosition -= SOUND_BUFFER_SIZE;
 									}
 
@@ -337,9 +341,13 @@ int main () {
 									if (secondaryBuffer->GetCurrentPosition(&playCursor, &writeCursor) == DS_OK) {
 										printf("write cursor %i \n", writeCursor);
 										LockedBuffer writeLock = {};
-										if (secondaryBuffer->Lock(writeCursor, bytesRead, &writeLock.ptr1, &writeLock.size1, &writeLock.ptr2, &writeLock.size2, 0) == DS_OK) {
+										HRESULT result = secondaryBuffer->Lock(writeCursor, bytesRead, &writeLock.ptr1, &writeLock.size1, &writeLock.ptr2, &writeLock.size2, 0);
+										if (result == DS_OK) {
 											memcpy(writeLock.ptr1, recvBuffer, writeLock.size1/*bytesRead*/);
-											secondaryBuffer->Unlock(&writeLock.ptr1, writeLock.size1, &writeLock.ptr2, writeLock.size2);
+											printf("written to output %i \n", writeLock.size1);
+											secondaryBuffer->Unlock(writeLock.ptr1, writeLock.size1, writeLock.ptr2, writeLock.size2);
+										} else {
+											assert(false);
 										}
 									} else {
 										assert(false);
@@ -352,7 +360,7 @@ int main () {
 							assert(false);
 						}
 #endif
-#if 0
+#if 1
 						send(socketHandle, "hey", 3, 0);
 						char buffer[10] = {};
 						int bytesRead = recv(socketHandle, buffer, 10, 0);
