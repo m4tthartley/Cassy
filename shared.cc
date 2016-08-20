@@ -4,6 +4,28 @@
 #define megabytes(num) (kilobytes(num)*1024)
 #define gigabytes(num) (megabytes(num)*1024)
 
+#define PORT "3430"
+
+#define SOUND_HTZ (44100 / 2)
+#define SOUND_CHANNELS 2
+#define SOUND_SAMPLE_BYTES 2
+#define SOUND_BYTES_PER_SEC (SOUND_HTZ * SOUND_CHANNELS * SOUND_SAMPLE_BYTES)
+#define SOUND_BUFFER_SIZE (SOUND_BYTES_PER_SEC * 4)
+
+#ifdef _WIN32
+#	define SOCKERR_INVALID INVALID_SOCKET
+#	define SOCKERR_ERROR SOCKET_ERROR
+#endif
+#ifdef __linux__
+#	define SOCKERR_INVALID -1
+#	define SOCKERR_ERROR -1
+#endif
+
+struct AudioPacketHeader {
+	char id[4];
+	int size;
+};
+
 struct StackAllocator {
 	char *mem;
 	size_t size;

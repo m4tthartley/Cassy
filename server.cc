@@ -6,14 +6,6 @@
 
 #include "shared.cc"
 
-#define PORT "3430"
-
-#define SOUND_HTZ 44100
-#define SOUND_CHANNELS 2
-#define SOUND_SAMPLE_BYTES 2
-#define SOUND_BYTES_PER_SEC (SOUND_HTZ * SOUND_CHANNELS * SOUND_SAMPLE_BYTES)
-#define SOUND_BUFFER_SIZE (SOUND_BYTES_PER_SEC * 4)
-
 #define MAX_CLIENTS 16
 
 struct Client {
@@ -23,6 +15,9 @@ struct Client {
 Client clients[MAX_CLIENTS] = {};
 
 int main () {
+	int test1 = SOCKERR_INVALID;
+	int test2 = SOCKERR_ERROR;
+
 	int socketHandle;
 
 	WSADATA winsockData;
@@ -44,7 +39,7 @@ int main () {
 	int result;
 	if (result = getaddrinfo(NULL, PORT, &hints, &serverInfo) == 0) {
 		socketHandle = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
-		if (socketHandle != INVALID_SOCKET) {
+		if (socketHandle != SOCKERR_INVALID) {
 			// fcntl(socketHandle, F_SETFL, O_NONBLOCK);
 			unsigned long nonBlock = 1;
 			int nonBlockResult = ioctlsocket(socketHandle, FIONBIO, &nonBlock);
@@ -53,18 +48,18 @@ int main () {
 			}
 
 			int value = 1;
-			if (setsockopt(socketHandle, SOL_SOCKET, SO_REUSEADDR, (char*)&value, sizeof(int)) != SOCKET_ERROR) {
-				if (bind(socketHandle, serverInfo->ai_addr, serverInfo->ai_addrlen) != SOCKET_ERROR) {
+			if (setsockopt(socketHandle, SOL_SOCKET, SO_REUSEADDR, (char*)&value, sizeof(int)) != SOCKERR_ERROR) {
+				if (bind(socketHandle, serverInfo->ai_addr, serverInfo->ai_addrlen) != SOCKERR_ERROR) {
 					freeaddrinfo(serverInfo);
 
-					if (listen(socketHandle, 10) != SOCKET_ERROR) {
+					if (listen(socketHandle, 10) != SOCKERR_ERROR) {
 						FD_SET(socketHandle, &socketSet);
 
 						while (true) {
 							tempSocketSet = socketSet;
 							// todo: Might need to set the first parameter for linux
 							int selectResult = select(0, &tempSocketSet, NULL, NULL, NULL);
-							if (selectResult == SOCKET_ERROR) {
+							if (selectResult == SOCKERR_ERROR) {
 								int error = WSAGetLastError();
 								assert(false);
 							}
@@ -73,7 +68,7 @@ int main () {
 								sockaddr clientAddr;
 								int clientAddrSize;
 								int acceptHandle = accept(socketHandle, &clientAddr, NULL/*&clientAddrSize*/);
-								if (acceptHandle != INVALID_SOCKET) {
+								if (acceptHandle != SOCKERR_INVALID) {
 									char ipBuffer[16];
 									sockaddr_in *inAddr = (sockaddr_in*)&clientAddr;
 									char *remoteIp = (char*)InetNtop(/*clientAddr.sa_family*/AF_INET, &inAddr->sin_addr, ipBuffer, 16);
@@ -94,8 +89,10 @@ int main () {
 							for (int i = 0; i < MAX_CLIENTS; ++i) {
 								if (clients[i].socket != -1 && FD_ISSET(clients[i].socket, &tempSocketSet)) {
 									int bytesRead = recv(clients[i].socket, recvBuffer, SOUND_BUFFER_SIZE, 0);
-									printf("bytes received %i \n", bytesRead);
-									if (bytesRead == SOCKET_ERROR) {
+									AudioPacketHeader *packet = (AudioPacketHeader*)&recvBuffer[0];
+									void *packetData = packet + 1;
+
+									if (bytesRead == SOCKERR_ERROR) {
 										// int x = 0;
 										int error = WSAGetLastError();
 										int x = 0;
@@ -115,14 +112,22 @@ int main () {
 										continue;
 									}
 
-									send(clients[i].socket, recvBuffer, bytesRead, 0);
-									printf("Recv %s \n", recvBuffer);
+									if (strncmp(packet->id, "CASY", 4) != 0) {
+										printf("Packet id is incorrect! \n");
+									}
+									if (bytesRead != sizeof(AudioPacketHeader) + packet->size) {
+										printf("partial packet %i / %i \n", bytesRead, sizeof(AudioPacketHeader) + packet->size);
+										send(clients[i].socket, (char*)packetData, 4, 0);
+									} else {
+										send(clients[i].socket, (char*)packet, sizeof(AudioPacketHeader) + packet->size, 0);
+										// printf("Recv %s \n", recvBuffer);
 
-									memset(recvBuffer, 0, SOUND_BUFFER_SIZE);
+										memset(recvBuffer, 0, SOUND_BUFFER_SIZE);
+									}
 								}
 							}
 
-							Sleep(100);
+							Sleep(50);
 						}
 
 #if 0
@@ -130,12 +135,12 @@ int main () {
 							printf("Waiting for connection... \n");
 
 							int acceptHandle = accept(socketHandle, &clientAddr, NULL/*&clientAddrSize*/);
-							if (acceptHandle != INVALID_SOCKET) {
+							if (acceptHandle != SOCKERR_INVALID) {
 								while (true) {
 									
 									int bytesRead = recv(acceptHandle, recvBuffer, SOUND_BUFFER_SIZE, 0);
 									printf("bytes received %i \n", bytesRead);
-									if (bytesRead == SOCKET_ERROR) {
+									if (bytesRead == SOCKERR_ERROR) {
 										// int x = 0;
 										int error = WSAGetLastError();
 										int x = 0;
