@@ -291,12 +291,12 @@ int main () {
 		WSAStartup(MAKEWORD(1, 1), &winsockData);
 
 		addrinfo hints = {};
-		hints.ai_family = AF_UNSPEC;
+		hints.ai_family = AF_INET /*AF_UNSPEC*/;
 		hints.ai_socktype = SOCK_STREAM;
 
 		addrinfo *serverInfo;
 		int socketHandle;
-		if (getaddrinfo("localhost", PORT, &hints, &serverInfo) == 0) {
+		if (getaddrinfo("giantjelly.net", PORT, &hints, &serverInfo) == 0) {
 			socketHandle = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
 			if (socketHandle != INVALID_SOCKET) {
 				if (connect(socketHandle, serverInfo->ai_addr, serverInfo->ai_addrlen) != SOCKET_ERROR) {
@@ -340,29 +340,33 @@ int main () {
 									int bytesRead = recv(socketHandle, recvBuffer, SOUND_BUFFER_SIZE, 0);
 									AudioPacketHeader *serverPacket = (AudioPacketHeader*)&recvBuffer[0];
 									void *serverPacketData = serverPacket + 1;
-									if (bytesRead != sizeof(AudioPacketHeader) + serverPacket->size) {
-										printf("partial packet %i/%i \n", bytesRead, sizeof(AudioPacketHeader) + serverPacket->size);
-									} else {
-										// printf("bytes received %i \n", bytesRead);
+									if (strncmp(serverPacket->id, "CASY", 4) == 0) {
+										if (bytesRead != sizeof(AudioPacketHeader) + serverPacket->size) {
+											printf("partial packet %i/%i \n", bytesRead, sizeof(AudioPacketHeader) + serverPacket->size);
+										} else {
+											// printf("bytes received %i \n", bytesRead);
 
-										DWORD playCursor;
-										DWORD writeCursor;
-										if (secondaryBuffer->GetCurrentPosition(&playCursor, &writeCursor) == DS_OK) {
-											// printf("write cursor %i \n", writeCursor);
-											LockedBuffer writeLock = {};
-											HRESULT result = secondaryBuffer->Lock(writeCursor, serverPacket->size, &writeLock.ptr1, &writeLock.size1, &writeLock.ptr2, &writeLock.size2, 0);
-											if (result == DS_OK) {
-												printf("write %i outputLast %i \n", writeCursor, outputCursor);
-												memcpy(writeLock.ptr1, serverPacketData, writeLock.size1/*bytesRead*/);
-												// printf("written to output %i \n", writeLock.size1);
-												secondaryBuffer->Unlock(writeLock.ptr1, writeLock.size1, writeLock.ptr2, writeLock.size2);
-												outputCursor = writeCursor + bytesRead;
+											DWORD playCursor;
+											DWORD writeCursor;
+											if (secondaryBuffer->GetCurrentPosition(&playCursor, &writeCursor) == DS_OK) {
+												// printf("write cursor %i \n", writeCursor);
+												LockedBuffer writeLock = {};
+												HRESULT result = secondaryBuffer->Lock(writeCursor, serverPacket->size, &writeLock.ptr1, &writeLock.size1, &writeLock.ptr2, &writeLock.size2, 0);
+												if (result == DS_OK) {
+													printf("write %i outputLast %i \n", writeCursor, outputCursor);
+													memcpy(writeLock.ptr1, serverPacketData, writeLock.size1/*bytesRead*/);
+													// printf("written to output %i \n", writeLock.size1);
+													secondaryBuffer->Unlock(writeLock.ptr1, writeLock.size1, writeLock.ptr2, writeLock.size2);
+													outputCursor = writeCursor + bytesRead;
+												} else {
+													assert(false);
+												}
 											} else {
 												assert(false);
 											}
-										} else {
-											assert(false);
 										}
+									} else {
+										printf("Invalid packet header \n");
 									}
 								} else {
 									assert(false);
@@ -383,6 +387,7 @@ int main () {
 				} else {
 					int error = WSAGetLastError();
 					int x = 0;
+					assert(false);
 				}
 			}
 		}

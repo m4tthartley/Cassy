@@ -53,7 +53,7 @@ int main () {
 	FD_ZERO(&tempSocketSet);
 
 	addrinfo hints = {};
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = AF_INET /*AF_UNSPEC*/;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 
