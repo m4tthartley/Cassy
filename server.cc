@@ -53,17 +53,19 @@ int main () {
 	FD_ZERO(&tempSocketSet);
 
 	addrinfo hints = {};
-	hints.ai_family = AF_UNSPEC;
+	hints.ai_family = AF_INET /*AF_UNSPEC*/;
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 
 	char recvBuffer[SOUND_BUFFER_SIZE];
+	int maxSocket;
 
 	addrinfo *serverInfo;
 	int result;
 	if ((result = getaddrinfo(NULL, PORT, &hints, &serverInfo)) == 0) {
 		socketHandle = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
 		if (socketHandle != SOCKERR_INVALID) {
+			maxSocket = socketHandle;
 			// fcntl(socketHandle, F_SETFL, O_NONBLOCK);
 			unsigned long nonBlock = 1;
 			int nonBlockResult = ioctlsocket(socketHandle, FIONBIO, &nonBlock);
@@ -79,10 +81,12 @@ int main () {
 					if (listen(socketHandle, 10) != SOCKERR_ERROR) {
 						FD_SET(socketHandle, &socketSet);
 
+						printf("Listening for connections... \n");
+
 						while (true) {
 							tempSocketSet = socketSet;
 							// todo: Might need to set the first parameter for linux
-							int selectResult = select(0, &tempSocketSet, NULL, NULL, NULL);
+							int selectResult = select(maxSocket+1, &tempSocketSet, NULL, NULL, NULL);
 							if (selectResult == SOCKERR_ERROR) {
 								int error = WSAGetLastError();
 								assert(false);
@@ -90,9 +94,13 @@ int main () {
 
 							if (FD_ISSET(socketHandle, &tempSocketSet)) {
 								sockaddr clientAddr;
-								int clientAddrSize;
-								int acceptHandle = accept(socketHandle, &clientAddr, NULL/*&clientAddrSize*/);
+								socklen_t clientAddrSize = sizeof(sockaddr);
+								int acceptHandle = accept(socketHandle, &clientAddr, &clientAddrSize);
 								if (acceptHandle != SOCKERR_INVALID) {
+									if (acceptHandle > maxSocket) {
+										maxSocket = acceptHandle;
+									}
+
 									char ipBuffer[16];
 									sockaddr_in *inAddr = (sockaddr_in*)&clientAddr;
 									char *remoteIp = (char*)inet_ntop(/*clientAddr.sa_family*/AF_INET, &inAddr->sin_addr, ipBuffer, 16);
@@ -107,6 +115,10 @@ int main () {
 											break;
 										}
 									}
+								} else {
+									int error = WSAGetLastError();
+									printf("accept error %i \n", error);
+									assert(false);
 								}
 							}
 
@@ -151,7 +163,7 @@ int main () {
 								}
 							}
 
-							Sleep(50);
+							usleep(50 * 1000);
 						}
 
 #if 0
