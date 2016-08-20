@@ -163,7 +163,7 @@ int main () {
 								}
 							}
 
-							usleep(50 * 1000);
+							sleepMsecs(50);
 						}
 
 #if 0

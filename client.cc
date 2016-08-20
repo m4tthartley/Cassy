@@ -296,7 +296,7 @@ int main () {
 
 		addrinfo *serverInfo;
 		int socketHandle;
-		if (getaddrinfo("giantjelly.net", PORT, &hints, &serverInfo) == 0) {
+		if (getaddrinfo("localhost", PORT, &hints, &serverInfo) == 0) {
 			socketHandle = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
 			if (socketHandle != INVALID_SOCKET) {
 				if (connect(socketHandle, serverInfo->ai_addr, serverInfo->ai_addrlen) != SOCKET_ERROR) {

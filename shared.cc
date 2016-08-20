@@ -79,3 +79,12 @@ void popStack (StackAllocator *memStack, size_t size) {
 		assert(false);
 	}
 }
+
+void sleepMsecs (int msecs) {
+#ifdef _WIN32
+	Sleep(msecs);
+#endif
+#ifdef __linux__
+	usleep(msecs * 1000);
+#endif
+}
