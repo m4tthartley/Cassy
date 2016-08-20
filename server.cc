@@ -1,7 +1,25 @@
 
-#include <winSock2.h>
-#include <windows.h>
-#include <ws2tcpip.h>
+#ifdef _WIN32
+#	include <winSock2.h>
+#	include <windows.h>
+#	include <ws2tcpip.h>
+#endif
+#ifdef __linux__
+#	include <unistd.h>
+#	include <sys/types.h>
+#	include <sys/socket.h>
+#	include <netdb.h>
+#	include <sys/ioctl.h>
+#	include <arpa/inet.h>
+#	include <errno.h>
+#	include <string.h>
+
+// #	include <fctl.h>
+#	define closesocket close
+#	define Sleep sleep
+#	define WSAGetLastError() errno
+#	define ioctlsocket ioctl
+#endif
 #include <stdio.h>
 
 #include "shared.cc"
@@ -9,7 +27,7 @@
 #define MAX_CLIENTS 16
 
 struct Client {
-	int socket = -1;
+	int socket;
 };
 
 Client clients[MAX_CLIENTS] = {};
@@ -18,10 +36,16 @@ int main () {
 	int test1 = SOCKERR_INVALID;
 	int test2 = SOCKERR_ERROR;
 
+	for (int i = 0; i < MAX_CLIENTS; ++i) {
+		clients[i].socket = -1;
+	}
+
 	int socketHandle;
 
+#ifdef _WIN32
 	WSADATA winsockData;
 	WSAStartup(MAKEWORD(1, 1), &winsockData);
+#endif
 
 	fd_set socketSet;
 	fd_set tempSocketSet;
@@ -37,7 +61,7 @@ int main () {
 
 	addrinfo *serverInfo;
 	int result;
-	if (result = getaddrinfo(NULL, PORT, &hints, &serverInfo) == 0) {
+	if ((result = getaddrinfo(NULL, PORT, &hints, &serverInfo)) == 0) {
 		socketHandle = socket(serverInfo->ai_family, serverInfo->ai_socktype, serverInfo->ai_protocol);
 		if (socketHandle != SOCKERR_INVALID) {
 			// fcntl(socketHandle, F_SETFL, O_NONBLOCK);
@@ -71,7 +95,7 @@ int main () {
 								if (acceptHandle != SOCKERR_INVALID) {
 									char ipBuffer[16];
 									sockaddr_in *inAddr = (sockaddr_in*)&clientAddr;
-									char *remoteIp = (char*)InetNtop(/*clientAddr.sa_family*/AF_INET, &inAddr->sin_addr, ipBuffer, 16);
+									char *remoteIp = (char*)inet_ntop(/*clientAddr.sa_family*/AF_INET, &inAddr->sin_addr, ipBuffer, 16);
 									printf("Connection from %s \n", ipBuffer);
 									int error = WSAGetLastError();
 									int x = 0;
@@ -116,7 +140,7 @@ int main () {
 										printf("Packet id is incorrect! \n");
 									}
 									if (bytesRead != sizeof(AudioPacketHeader) + packet->size) {
-										printf("partial packet %i / %i \n", bytesRead, sizeof(AudioPacketHeader) + packet->size);
+										printf("partial packet %i / %lu \n", bytesRead, sizeof(AudioPacketHeader) + packet->size);
 										send(clients[i].socket, (char*)packetData, 4, 0);
 									} else {
 										send(clients[i].socket, (char*)packet, sizeof(AudioPacketHeader) + packet->size, 0);

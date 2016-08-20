@@ -1,4 +1,6 @@
 
+#include <stdlib.h>
+
 #define assert(exp) if (!exp) { *((int*)0) = 0; }
 #define kilobytes(num) (num*1024)
 #define megabytes(num) (kilobytes(num)*1024)
@@ -35,7 +37,12 @@ struct StackAllocator {
 StackAllocator createStackAllocator (size_t size) {
 	StackAllocator memStack = {};
 
+#ifdef _WIN32
 	memStack.mem = (char*)VirtualAlloc(0, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+#endif
+#ifdef __linux__
+	memStack.mem = (char*)malloc(size);
+#endif
 	if (memStack.mem) {
 		memStack.size = size;
 	} else {
